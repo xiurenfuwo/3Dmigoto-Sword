@@ -1,12 +1,14 @@
-from ReverseConfig import *
+from ReverseConfig import vertex_config, preset_config
+import struct
+import os
 
 
-def get_category_minnum_maxnum_dict_from_ib_file(fc_tmp_ib_file_list):
+def get_category_min_num_max_num_dict_from_ib_file(fc_tmp_ib_file_list):
     # 读取ib文件，并在格式转换后全部堆叠到一起来输出到一个完整的ib文件
     total_num = 0
 
-    tmp_category_minnum_dict = {}
-    tmp_category_maxnum_dict = {}
+    tmp_category_min_num_dict = {}
+    tmp_category_max_num_dict = {}
     for ib_num in range(len(fc_tmp_ib_file_list)):
         ib_filename = fc_tmp_ib_file_list[ib_num]
 
@@ -20,7 +22,9 @@ def get_category_minnum_maxnum_dict_from_ib_file(fc_tmp_ib_file_list):
         max_count = 0
         min_count = 9999999
         while i < len(tmp_ib_bytearray):
-            tmp_byte = struct.pack(write_pack_sign, struct.unpack(read_pack_sign, tmp_ib_bytearray[i:i + read_pack_stride])[0])
+            array = tmp_ib_bytearray[i:i + read_pack_stride]
+            tmp_byte = struct.pack(write_pack_sign,
+                                   struct.unpack(read_pack_sign, array)[0])
             now_count = int.from_bytes(tmp_byte, "little")
             if now_count >= max_count:
                 max_count = now_count
@@ -28,9 +32,9 @@ def get_category_minnum_maxnum_dict_from_ib_file(fc_tmp_ib_file_list):
                 min_count = now_count
             i += read_pack_stride
         print("min count " + str(min_count) + "   max count " + str(max_count))
-        tmp_category_minnum_dict[ib_category_list[ib_num]] = min_count
-        tmp_category_maxnum_dict[ib_category_list[ib_num]] = max_count
-    return tmp_category_minnum_dict, tmp_category_maxnum_dict
+        tmp_category_min_num_dict[ib_category_list[ib_num]] = min_count
+        tmp_category_max_num_dict[ib_category_list[ib_num]] = max_count
+    return tmp_category_min_num_dict, tmp_category_max_num_dict
 
 
 def collect_ib_subtract_offset(filename, offset):
@@ -40,7 +44,8 @@ def collect_ib_subtract_offset(filename, offset):
         data = bytearray(data)
         i = 0
         while i < len(data):
-            ib += struct.pack(write_pack_sign, struct.unpack(read_pack_sign, data[i:i + read_pack_stride])[0] - offset)
+            array = data[i:i + read_pack_stride]
+            ib += struct.pack(write_pack_sign, struct.unpack(read_pack_sign, array)[0] - offset)
             i += read_pack_stride
     return ib
 
@@ -81,18 +86,19 @@ def get_fmt_str_and_stride_from_element_list():
     return fc_tmp_fmt_str, stride
 
 
-def split_vb_files(fc_tmp_category_offset_dict, fc_tmp_category_maxnum_dict, fc_tmp_vb_file_bytearray, fc_tmp_category_output_name_dict,fc_tmp_stride):
+def split_vb_files(fc_tmp_category_offset_dict, fc_tmp_category_max_num_dict,
+                   fc_tmp_vb_file_bytearray, fc_tmp_category_output_name_dict, fc_tmp_stride):
     # 分割VB文件为多个vb文件
     left_offset_num = 0
 
     for fc_tmp_category in fc_tmp_category_offset_dict:
         print("Processing: " + str(fc_tmp_category))
-        fc_tmp_category_maxnum = fc_tmp_category_maxnum_dict.get(fc_tmp_category)
+        fc_tmp_category_max_num = fc_tmp_category_max_num_dict.get(fc_tmp_category)
         vb_file_name = fc_tmp_category_output_name_dict.get(fc_tmp_category)[1]
         print(vb_file_name)
 
         left_offset = left_offset_num
-        right_offset = left_offset_num + fc_tmp_stride * (fc_tmp_category_maxnum + 1)
+        right_offset = left_offset_num + fc_tmp_stride * (fc_tmp_category_max_num + 1)
 
         print("Left: " + str(left_offset/fc_tmp_stride) + "  Right: " + str(right_offset/fc_tmp_stride))
         output_vb_bytearray = fc_tmp_vb_file_bytearray[left_offset:right_offset]
@@ -101,7 +107,7 @@ def split_vb_files(fc_tmp_category_offset_dict, fc_tmp_category_maxnum_dict, fc_
         output_vb_file.write(output_vb_bytearray)
         output_vb_file.close()
 
-        left_offset_num = fc_tmp_stride * (fc_tmp_category_maxnum + 1)
+        left_offset_num = fc_tmp_stride * (fc_tmp_category_max_num + 1)
 
 
 def get_category_vb_filename_dict(fc_tmp_mod_files):
@@ -139,13 +145,17 @@ def get_vb_byte_array(fc_tmp_category_vb_filename_dict):
         tmp_vb_file.close()
 
         category_bytearray_list = []
-        categorty_stride = category_stride_dict.get(category)
+        category_stride = category_stride_dict.get(category)
+        # 使用 input_stride（含 padding）对齐顶点边界，若无则回退到 category_stride
+        input_stride = input_stride_dict.get(category, category_stride)
         print(category)
-        print(categorty_stride)
+        print("category_stride(element): " + str(category_stride) + "  input_stride(padded): " + str(input_stride))
         i = 0
         while i < len(data):
-            category_bytearray_list.append(data[i:i + categorty_stride])
-            i += categorty_stride
+            chunk = data[i:i + input_stride]
+            # 剥离 padding：只保留 category_stride 字节的有意义数据
+            category_bytearray_list.append(chunk[:category_stride])
+            i += input_stride
         vertex_count = len(category_bytearray_list)
         category_vb_bytearray_list_dict[category] = category_bytearray_list
 
@@ -178,24 +188,24 @@ def get_category_output_name_dict(fc_tmp_fmt_str):
     return fc_tmp_category_output_name_dict
 
 
-def convert_and_output_ib_file(fc_tmp_category_output_name_dict,fc_tmp_category_minnum_dict):
+def convert_and_output_ib_file(fc_tmp_category_output_name_dict, fc_tmp_category_min_num_dict):
     for category in fc_tmp_category_output_name_dict:
         output_ib_name = fc_tmp_category_output_name_dict.get(category)[0]
-        category_minnum = fc_tmp_category_minnum_dict.get(category)
+        category_min_num = fc_tmp_category_min_num_dict.get(category)
         '''
         这里所谓的offset，就是每个ib文件中出现的最小的数字,
         这里是把原本的Head,Body,Dress的三个ib文件，分别减去其每个ib文件中最小的值，
         使得格式全部变成从0开始的值，这样才能导入blender，
         因为mod格式的ib文件，值是从偏移量那里开始的。
         '''
-        original_ib_data = collect_ib_subtract_offset(reverse_mod_path + output_ib_name, category_minnum)
+        original_ib_data = collect_ib_subtract_offset(reverse_mod_path + output_ib_name, category_min_num)
         with open(output_folder + output_ib_name, "wb") as output_ib_file:
             output_ib_file.write(original_ib_data)
 
 
 def start_reverse():
     # (3) 读取ib文件中，分别最小和最大的数，用于后续转换ib文件时和分割vb文件时提供坐标指示
-    category_minnum_dict, category_maxnum_dict = get_category_minnum_maxnum_dict_from_ib_file(ib_file_list)
+    category_min_num_dict, category_max_num_dict = get_category_min_num_max_num_dict_from_ib_file(ib_file_list)
 
     # (4) 获取最终要进行分割处理的vb文件内容
     vb_file_bytearray = get_vb_byte_array(category_vb_filename_dict)
@@ -207,10 +217,10 @@ def start_reverse():
     category_output_name_dict = get_category_output_name_dict(fmt_str)
 
     # (7) 把每个ib文件转换成特殊格式后再输出
-    convert_and_output_ib_file(category_output_name_dict, category_minnum_dict)
+    convert_and_output_ib_file(category_output_name_dict, category_min_num_dict)
 
     # (8) 将完整的vb文件分割为多个vb文件
-    split_vb_files(category_minnum_dict, category_maxnum_dict, vb_file_bytearray, category_output_name_dict, stride)
+    split_vb_files(category_min_num_dict, category_max_num_dict, vb_file_bytearray, category_output_name_dict, stride)
 
 
 if __name__ == "__main__":
@@ -222,10 +232,19 @@ if __name__ == "__main__":
     vb_category_list = preset_config["General"]["vb_category_list"].split(",")
     element_list = preset_config["General"]["element_list"].split(",")
 
-
-
     category_stride_dict = {option: int(value) for option, value in preset_config.items('CategoryStride')}
     print(category_stride_dict)
+
+    # 读取 OutputStride 作为输入 stride（buf 文件可能包含 padding）
+    # OutputStride 同时用于 SplitToBuffer.py 的输出填充和 ReverseToModel.py 的输入对齐
+    input_stride_dict = {}
+    if preset_config.has_section('OutputStride'):
+        for option in preset_config.options('OutputStride'):
+            val = preset_config.get('OutputStride', option).strip()
+            if val:
+                input_stride_dict[option] = int(val)
+    print("input_stride_dict:")
+    print(input_stride_dict)
 
     # ------------------   format    --------------------------
     read_dxgi_format = preset_config["Format"]["read_dxgi_format"]
@@ -272,5 +291,3 @@ if __name__ == "__main__":
 
     # 正式启动逆向
     start_reverse()
-
-

@@ -1,8 +1,8 @@
-import os
 import configparser
-import shutil
-import struct
-import math
+import os
+
+folder_path = os.path.dirname(os.path.abspath(__file__))
+os.chdir(folder_path)
 
 # 读取配置文件
 global_config = configparser.ConfigParser()

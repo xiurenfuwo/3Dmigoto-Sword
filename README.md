@@ -61,3 +61,5 @@ Mod格式转换应该是每个Mod作者都熟练掌握的一个基础技能。
 最后，逆向脚本不会改变任何事情，喜欢你的人依旧会赞助你来获取mod，不喜欢你的人依然不会赞助你，
 如果你只是因为害怕自己的mod被别人查看和修改而责怪逆向脚本本身，那只能说明你的自私和巨婴。
 
+# 修复雅珂达mod失效
+ReverseScripts_Banana中实现了该修复。当Texcoord = 28时，CategoryStride中的Texcoord还为20，OutputStride中的Texcoord设为28。

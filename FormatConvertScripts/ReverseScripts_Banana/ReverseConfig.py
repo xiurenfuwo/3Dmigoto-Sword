@@ -1,8 +1,8 @@
-import os
 import configparser
-import shutil
-import struct
-import math
+import os
+
+folder_path = os.path.dirname(os.path.abspath(__file__))
+os.chdir(folder_path)
 
 global_config = configparser.ConfigParser()
 global_config.read("Configs/global_config.ini", "utf-8")

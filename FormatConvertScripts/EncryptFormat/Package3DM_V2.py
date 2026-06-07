@@ -5,12 +5,6 @@ import struct
 这种单纯的把文件全塞到一起的方式肯定是不行的，得设计一套专门的文件格式，利用索引偏移，存储不同类型的资源列表
 前提条件是搞懂3Dmigoto到底是怎么解析资源文件的，以及解析后在内存中存放的结构是怎样的。
 
-
-
-
-
-
-
 '''
 
 def traverse_folder(folder_path):
@@ -28,7 +22,7 @@ class migotoFile:
     file_buffer_size = None
     file_name = None
 
-    def __init__(self,file_id,file_buffer):
+    def __init__(self, file_id, file_buffer):
         self.file_id = file_id
         self.file_buffer = file_buffer
         self.file_buffer_size = len(file_buffer)
@@ -59,7 +53,6 @@ if __name__ == "__main__":
         migotoFileList.append(migoto_file)
         file_id = file_id + 1
 
-
     # NicoMico,元数据部分长度
 
     migoto_bytearray = b""
@@ -73,16 +66,6 @@ if __name__ == "__main__":
     for migoto_file in migotoFileList:
         migoto_bytearray += migoto_file.file_buffer
 
-
     final_file = open(mod_folder + mod_name + ".3dm", "wb+")
     final_file.write(migoto_bytearray)
     final_file.close()
-
-
-
-
-
-
-
-
-

@@ -45,7 +45,7 @@ def collect_ib(filename, offset):
 
 
 if __name__ == "__main__":
-    ib_bytearray = collect_ib(ib_file_path,0)
+    ib_bytearray = collect_ib(ib_file_path, 0)
     new_ib_file = open(ib_file_path + "_" + write_ib_format + ".ib", "wb")
     new_ib_file.write(ib_bytearray)
     new_ib_file.close()

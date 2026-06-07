@@ -1,4 +1,7 @@
-from ReverseConfig import *
+from ReverseConfig import preset_config, vertex_config
+import os
+import configparser
+import struct
 
 
 # 读取必须的参数
@@ -20,7 +23,7 @@ print("逆向Mod的主ini文件名称：" + reverse_ini_name)
 
 class IniKVPair:
     section_name = ""
-    kv_map = {"":""}
+    kv_map = {"": ""}
 
     def __str__(self):
         print_str = "SectionName: " + self.section_name + "\n"
@@ -207,7 +210,6 @@ if read_dxgi_format == "DXGI_FORMAT_R32_UINT":
     write_pack_sign = 'I'
 
 
-
 # 拼接每个分类的步长字典
 category_stride_dict = {}
 for vb_suffix in vb_suffix_order:
@@ -221,6 +223,7 @@ for vb_suffix in vb_suffix_order:
             break
 
 print(category_stride_dict)
+
 
 def get_category_minnum_maxnum_dict_from_ib_file(fc_tmp_ib_file_list):
     # 读取ib文件，并在格式转换后全部堆叠到一起来输出到一个完整的ib文件
@@ -460,5 +463,3 @@ if __name__ == "__main__":
 
     # 正式启动逆向
     start_reverse()
-
-

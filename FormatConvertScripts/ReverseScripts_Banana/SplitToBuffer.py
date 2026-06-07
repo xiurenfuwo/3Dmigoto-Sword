@@ -1,4 +1,6 @@
-from ReverseConfig import *
+from ReverseConfig import preset_config, vertex_config, tmp_config, config_folder
+import os
+import struct
 
 
 # https://github.com/Vectorized/Python-KD-Tree
@@ -32,8 +34,9 @@ class KDTree(object):
         """
 
         if dist_sq_func is None:
-            dist_sq_func = lambda a, b: sum((x - b[i]) ** 2
-                                            for i, x in enumerate(a))
+            # dist_sq_func = lambda a, b: sum((x - b[i]) ** 2 for i, x in enumerate(a))
+            def dist_sq_func(a, b):
+                return sum((x - b[i]) ** 2 for i, x in enumerate(a))
 
         def make(points, i=0):
             if len(points) > 1:
@@ -55,6 +58,7 @@ class KDTree(object):
                         add_point(node[j], point, (i + 1) % dim)
 
         import heapq
+
         def get_knn(node, point, k, return_dist_sq, heap, i=0, tiebreaker=1):
             if node is not None:
                 dist_sq = dist_sq_func(point, node[2])
@@ -139,8 +143,8 @@ class KDTree(object):
             else:
                 point
         """
-        l = self._get_knn(self._root, point, 1, return_dist_sq, [])
-        return l[0] if len(l) else None
+        s = self._get_knn(self._root, point, 1, return_dist_sq, [])
+        return s[0] if len(s) else None
 
 
 # -----------------------------------General--------------------------------------------
@@ -162,7 +166,7 @@ read_ib_format = preset_config["Split"]["read_ib_format"]
 write_ib_format = preset_config["Split"]["write_ib_format"]
 
 # SplitBufferPath
-split_buffer_path = reverse_mod_path + "Split/"
+split_buffer_path = reverse_mod_path + "modify/"
 if not os.path.exists(split_buffer_path):
     os.mkdir(split_buffer_path)
 
@@ -198,6 +202,14 @@ for categpory in categories:
 # 获取所有的vb槽位
 category_list = list(category_element_list.keys())
 
+# 读取OutputStride配置（打包时的目标stride）
+output_stride_dict = {}
+if preset_config.has_section('OutputStride'):
+    for option in preset_config.options('OutputStride'):
+        val = preset_config.get('OutputStride', option).strip()
+        if val:
+            output_stride_dict[option] = int(val)
+
 
 resource_ib_partnames = []
 for part_name in part_names:
@@ -218,6 +230,8 @@ def get_original_tangent_v2(points, tangents, position_input):
 
     i = 0
     while i < len(position):
+        if len(points) == 0:
+            return position
         if len(points[0]) == 3:
             x, y, z = struct.unpack("f", position[i:i + 4])[0], struct.unpack("f", position[i + 4:i + 8])[0], \
                 struct.unpack("f", position[i + 8:i + 12])[0]
@@ -352,7 +366,6 @@ def collect_vb_Unity(vb_file_name, collect_stride, ignore_tangent=True):
     return collect_vb_slot_bytearray_dict, position_float_list, tangent_float_list
 
 
-
 def split_ib_vb_file():
     # 首先计算步长
     stride = 0
@@ -377,14 +390,12 @@ def split_ib_vb_file():
         # 这里获取了vb0:bytearray() 这样的字典
         vb_slot_bytearray_dict = {}
 
-        vb_slot_bytearray_dict, position_float_list, tangent_float_list = collect_vb_Unity(vb_filename, stride,
-                                                                                               ignore_tangent=ignore_tangent)
+        vb_slot_bytearray_dict, position_float_list, tangent_float_list = collect_vb_Unity(vb_filename, stride, ignore_tangent=ignore_tangent)
 
         for vb_slot_categpory in vb_slot_bytearray_dict:
-            print("category:")
-            print(vb_slot_categpory)
+            print("category:" + vb_slot_categpory)
             vb_byte_array = vb_slot_bytearray_dict.get(vb_slot_categpory)
-
+            
             # 获取总的vb_byte_array:
             vb0_byte_array = vb0_slot_bytearray_dict.get(vb_slot_categpory)
             # 如果为空就初始化一下
@@ -418,6 +429,20 @@ def split_ib_vb_file():
     for categpory in vb0_slot_bytearray_dict:
         vb0_byte_array = vb0_slot_bytearray_dict.get(categpory)
 
+        # 如果配置了OutputStride，需要填充padding
+        target_stride = output_stride_dict.get(categpory)
+        if target_stride is not None and target_stride > category_stride_dict.get(categpory, 0):
+            src_stride = category_stride_dict.get(categpory)
+            vertex_count = len(vb0_byte_array) // src_stride
+            padded_array = bytearray()
+            for i in range(vertex_count):
+                start = i * src_stride
+                end = start + src_stride
+                padded_array += vb0_byte_array[start:end]
+                padded_array += bytearray(target_stride - src_stride)  # padding
+            vb0_byte_array = padded_array
+            print(f"Padding {categpory} from stride {src_stride} to {target_stride}, vertices: {vertex_count}")
+
         with open(split_buffer_path + mod_name + categpory + ".buf", "wb") as byte_array_file:
             byte_array_file.write(vb0_byte_array)
 
@@ -430,6 +455,3 @@ def split_ib_vb_file():
 if __name__ == "__main__":
     print("Start to split ib and vb file.")
     split_ib_vb_file()
-
-
-
